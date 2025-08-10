@@ -30,51 +30,15 @@ def load_transcript(path: str, max_bytes: int = 400_000) -> str:
     try:
         p = pathlib.Path(os.path.expanduser(path))
         if not p.exists():
-            return "<transcript/>"
+            return ""
         data = p.read_bytes()
         if len(data) > max_bytes:
             data = data[-max_bytes:]
-        lines = data.decode("utf-8", errors="ignore").splitlines()
-        xml_chunks = ["<transcript>"]
-        for ln in lines:
-            ln = ln.strip()
-            if not ln:
-                continue
-            try:
-                obj = json.loads(ln)
-            except Exception:
-                xml_chunks.append(f"<raw>{escape_xml(ln)[:4000]}</raw>")
-                continue
+        return data.decode("utf-8", errors="ignore")
+    except Exception:
+        return ""
 
-            role = obj.get("role") or obj.get("author") or "unknown"
-            content = obj.get("content") or obj.get("text") or ""
-            if isinstance(content, str):
-                text = content
-            elif isinstance(content, list):
-                parts = []
-                for c in content:
-                    if isinstance(c, dict):
-                        t = c.get("text") or c.get("content") or ""
-                        if t:
-                            parts.append(str(t))
-                text = "\n".join(parts)
-            else:
-                text = str(content)
-
-            text = truncate(text, 8000)
-            xml_chunks.append(f'<turn role="{escape_xml(role)}">{escape_xml(text)}</turn>')
-        xml_chunks.append("</transcript>")
-        return "\n".join(xml_chunks)
-    except Exception as e:
-        return f"<transcript error='{escape_xml(str(e))}'/>"
-
-def escape_xml(s: str) -> str:
-    return (s.replace("&", "&amp;")
-             .replace("<", "&lt;")
-             .replace(">", "&gt;"))
-
-def truncate(s: str, n: int) -> str:
-    return s if len(s) <= n else (s[:n] + " …[truncated]")
+ 
 
 def propose_changes_from_llm(transcript_xml: str) -> list:
     # TODO: Integrate with an LLM provider to analyze transcript_xml and propose changes
@@ -102,8 +66,6 @@ def main():
     transcript_path = hook.get("transcript_path", "")
     debug_log(f"transcript_path: {transcript_path}")
     transcript_xml = load_transcript(transcript_path)
-    debug_log(f"transcript_xml length: {len(transcript_xml)} chars")
-    debug_log(f"transcript_xml preview: {transcript_xml[:500]}...")
 
     debug_log("Calling LLM to propose changes...")
     changes = propose_changes_from_llm(transcript_xml)
