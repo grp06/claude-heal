@@ -152,8 +152,14 @@ def main():
     if not changes:
         sys.exit(0)
 
-    # TODO: If changes are produced in the future, emit actionable instructions here
-    # to guide an automated follow-up step.
+    # Emit JSON to block stop and instruct Claude to apply changes
+    output = {
+        "decision": "block",
+        "reason": f"Apply the following CLAUDE.md updates discovered this turn. For each item: use Write/Edit to update the file at the specified path with the changes described.\n\nCHANGES_JSON:\n{json.dumps(changes)}"
+    }
+    
+    print(json.dumps(output))
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()
