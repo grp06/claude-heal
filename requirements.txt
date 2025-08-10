@@ -1,1 +1,3 @@
-cerebras_cloud_sdk>=1.23.0
+anthropic==0.62.0
+cerebras-cloud-sdk==1.46.0
+openai==1.99.6
