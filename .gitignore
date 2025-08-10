@@ -40,3 +40,4 @@ htmlcov/
 .env
 .env.*
 
+debug/

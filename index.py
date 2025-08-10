@@ -5,14 +5,31 @@ from datetime import datetime
 
 # ---------- utilities ----------
 def debug_log(message: str):
-    """Write debug messages to a rolling log file"""
-    log_path = "/tmp/claude_hook_debug.log"
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    """Write debug messages to a timestamped log file"""
+    # Get the directory where this script is located
+    script_dir = pathlib.Path(__file__).resolve().parent
+    debug_dir = script_dir / "debug"
+    debug_dir.mkdir(exist_ok=True)  # Ensure debug directory exists
+    
+    # Create or get the session log file
+    # Use a global to maintain the same file for the entire hook run
+    global _log_file_path
     try:
-        with open(log_path, "a") as f:
+        _log_file_path
+    except NameError:
+        # First call - create new timestamped log file
+        file_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]  # Include milliseconds
+        _log_file_path = debug_dir / f"hook_{file_timestamp}.log"
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Include milliseconds
+    try:
+        with open(_log_file_path, "a") as f:
             f.write(f"[{timestamp}] {message}\n")
-    except Exception:
-        pass  # Ignore logging errors
+            f.flush()  # Ensure immediate write
+    except Exception as e:
+        # Try to write error to stderr so we can see what's wrong
+        sys.stderr.write(f"DEBUG_LOG_ERROR: {str(e)}\n")
+        sys.stderr.flush()
 
 def read_stdin_json():
     try:
