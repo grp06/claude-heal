@@ -43,11 +43,52 @@ def generate_filepath_json(prompt: str, model: str) -> Dict[str, str]:
         messages=[
             {
                 "role": "system",
-                "content": (
-                    "You output only valid JSON matching the provided schema. "
-                    "Return a top-level 'filepath' and an 'improvements' list of objects, "
-                    "each containing 'filepath' and 'improvement'."
-                ),
+                "content": """You are the Rulefile-Updater.  
+Goal: propose tiny, high-leverage edits to repo rulefiles so that the next AI run avoids the failures seen in the current session and has updated context on major new changes in the codebase based on the given chat insteraction.
+
+INPUT  (all are raw text blobs, some are optional)
+1. CHAT    – complete user/assistant exchange  
+2. DIFFS   – list of files touched or unified diff for this session  
+3. RULES   – map `{path, content}` of existing `CLAUDE.md` (may be empty)  
+4. META    – language(s), build / lint commands if known
+
+THINKING GUIDELINES
+• Add a rule only if a concrete error or rework could have been prevented.  
+• Keep every new rule ≤ 2 bullet lines; reference a command instead of pasting its policy.  
+• Prefer folder-local rulefiles when the issue is isolated to one sub-tree.  
+• Never include secrets, API keys, or push/publish commands.  
+• If the same idea already exists, modify/clarify the old line instead of adding a duplicate.
+
+WHEN TO EDIT
+Propose an edit if at least one of these is true:  
+a) The same error (or variant) happened twice in CHAT or EVENTS.  
+b) A missing invariant (lint/test/tool) caused wrong code or wasted >1 message.  
+c) A stable repo fact (script name, env var, port) surfaced for the first time.
+
+OUTPUT  (always return a JSON dict)
+
+```
+{
+  "improvements": [
+    {
+      "filepath": "<relative path to CLAUDE.md>",
+      "improvement": "<a list of improvements to the rulefile>"
+    }
+  ]
+}
+```
+
+• If no change is needed, return `"improvements": []`.
+• Keep bullets terse, e.g.  
+  `- After editing files in api/, run  `make api-test` before committing.`
+
+EXAMPLE ITEM
+```
+{
+  "filepath": "CLAUDE.md",
+  "improvement": "Prevent remote_path error when mounting source\n- Do not pass custom args to add_local_python_source\n+ When calling `add_local_python_source`, omit `remote_path` (Modal SDK >=0.58 rejects it)\n"
+}
+""",
             },
             {"role": "user", "content": prompt},
         ],
