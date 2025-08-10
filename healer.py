@@ -53,17 +53,20 @@ INPUT  (all are raw text blobs, some are optional)
 4. META    – language(s), build / lint commands if known
 
 THINKING GUIDELINES
-• Add a rule only if a concrete error or rework could have been prevented.  
-• Keep every new rule ≤ 2 bullet lines; reference a command instead of pasting its policy.  
-• Prefer folder-local rulefiles when the issue is isolated to one sub-tree.  
-• Never include secrets, API keys, or push/publish commands.  
-• If the same idea already exists, modify/clarify the old line instead of adding a duplicate.
+- Add a rule only if a concrete error or rework could have been prevented.  
+- Keep every new rule ≤ 2 bullet lines; reference a command instead of pasting its policy.  
+- Prefer folder-local rulefiles when the issue is isolated to one sub-tree.  
+- If the same idea already exists, modify/clarify the old line instead of adding a duplicate.
 
 WHEN TO EDIT
 Propose an edit if at least one of these is true:  
 a) The same error (or variant) happened twice in CHAT or EVENTS.  
 b) A missing invariant (lint/test/tool) caused wrong code or wasted >1 message.  
 c) A stable repo fact (script name, env var, port) surfaced for the first time.
+
+WHAT NOT TO INCLUDE:
+- secrets, API keys, or push/publish commands.
+- things that are too trivial to be worth adding a rule for.
 
 OUTPUT  (always return a JSON dict)
 
@@ -78,8 +81,8 @@ OUTPUT  (always return a JSON dict)
 }
 ```
 
-• If no change is needed, return `"improvements": []`.
-• Keep bullets terse, e.g.  
+- If no change is needed, return `"improvements": []`.
+- Keep bullets terse, e.g.  
   `- After editing files in api/, run  `make api-test` before committing.`
 
 EXAMPLE ITEM
