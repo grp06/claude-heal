@@ -15,7 +15,7 @@ Automatically keep `claude.md` (Claude context/rules) files accurate and up-to-d
   5. Blocks stoppage (`exit 2`) and sends Claude instructions to apply those changes via Write/Edit tools.
 
 ## Goals
-- Ensure Claude always has correct persistent context (ports, env details, architecture facts, style rules).
+- Ensure Claude always has correct persistent context (ports, architecture facts, style rules).
 - Reduce repeated mistakes caused by outdated `claude.md` files.
 - Keep edits scoped only to relevant `claude.md` files.
 
@@ -35,3 +35,5 @@ Automatically keep `claude.md` (Claude context/rules) files accurate and up-to-d
 - Ensure f‑string placeholders are written as `{variable}` (no extra parentheses) to avoid syntax errors.
 - Always read the `cwd` field from the hook payload to locate project files such as `claude.md` before invoking the LLM.
 - In JSON output strings, reference variables directly (`{changes}`) rather than using `{(changes)}` which produces malformed f‑strings.
+- Before executing any Python script, ensure the project's virtual environment is activated; if `venv/` exists, run `source venv/bin/activate` first.
+- Do not run `pip install` without explicit user approval; always ask before installing new packages or changing the environment.
