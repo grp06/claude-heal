@@ -30,10 +30,8 @@ Automatically keep `claude.md` (Claude context/rules) files accurate and up-to-d
 - Command: `python3 ~/.claude/hooks/heal_claude_files.py`
 - Timeout: 120 seconds
 
-## Example
-1. `claude.md` says: “App runs on port 3000.”
-2. In session, Claude discovers: “Port 3000 is in use, run on 3001.”
-3. Hook detects this, LLM proposes:
-   ```json
-   [{"path": "claude.md", "changes": "never run the app on port 3000, always run it on port 3001"}]
-````
+## Failure Mode Prevention
+- Do **not truncate** the transcript or `claude.md` content before sending to the LLM; pass the full cleaned strings.
+- Ensure f‑string placeholders are written as `{variable}` (no extra parentheses) to avoid syntax errors.
+- Always read the `cwd` field from the hook payload to locate project files such as `claude.md` before invoking the LLM.
+- In JSON output strings, reference variables directly (`{changes}`) rather than using `{(changes)}` which produces malformed f‑strings.

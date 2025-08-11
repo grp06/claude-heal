@@ -1,6 +1,7 @@
 import os, sys, json, pathlib
 from datetime import datetime
 from cerebras.cloud.sdk import Cerebras
+from dotenv import load_dotenv
 
 
 def debug_log(message: str):
@@ -57,6 +58,12 @@ def load_transcript(path: str, max_bytes: int = 400_000) -> list:
         "stop_reason",
         "stop_sequence",
         "usage",
+        "sessionId",
+        "uuid",
+        "timestamp",
+        "userType",
+        "id"
+
     ]
 
     try:
@@ -88,12 +95,31 @@ def load_transcript(path: str, max_bytes: int = 400_000) -> list:
         return []
 
 
+def read_claude_md(cwd: str) -> str:
+    """Read claude.md file from the given directory."""
+    try:
+        claude_md_path = pathlib.Path(cwd) / "claude.md"
+        if claude_md_path.exists():
+            content = claude_md_path.read_text(encoding="utf-8")
+            debug_log(f"Successfully read claude.md from {claude_md_path}")
+            return content
+        else:
+            debug_log(f"claude.md not found at {claude_md_path}")
+            return ""
+    except Exception as e:
+        debug_log(f"Error reading claude.md: {str(e)}")
+        return ""
+
+
 def create_cerebras_client() -> Cerebras:
-    api_key = "csk-kcmvvx4496h44jk5rerhcpcjrr6vjx5rvfwyd524pwk48mdr"
+    load_dotenv()
+    api_key = os.getenv("API_KEY")
+    if not api_key:
+        raise ValueError("API_KEY not found in environment variables")
     return Cerebras(api_key=api_key)
 
 
-def propose_changes_from_llm(transcript_jsonl: list) -> str | None:
+def propose_changes_from_llm(transcript_jsonl: list, claude_md_content: str = "") -> str | None:
     if not transcript_jsonl:
         return None
 
@@ -101,13 +127,12 @@ def propose_changes_from_llm(transcript_jsonl: list) -> str | None:
         client = create_cerebras_client()
 
         # Convert cleaned JSONL to string for LLM
-        transcript_str = json.dumps(transcript_jsonl, indent=2)[
-            :5000
-        ]  # Limit to first 5000 chars
+        transcript_str = json.dumps(transcript_jsonl, indent=2)
 
         # Log formatted input
         debug_log("=== INPUT TO LLM ===")
-        debug_log(transcript_str)
+        debug_log(f"Transcript: {transcript_str}")  # Log full transcript
+        debug_log(f"Claude.md content: {claude_md_content}")  # Log full claude.md
 
         # Simple prompt to analyze transcript and propose updates
         completion = client.chat.completions.create(
@@ -115,71 +140,71 @@ def propose_changes_from_llm(transcript_jsonl: list) -> str | None:
             messages=[
                 {
                     "role": "system",
-                    "content": """You are the claude code rule file updater.  
+                    "content": """You are the Claude failure mode documenter. Your job is to identify RECURRING FAILURE PATTERNS that AI coding assistants encounter and document them to prevent future failures.
 
-<claude-md-context>
-# What a rulefile is
+<key-principle>
+DOCUMENT FAILURE MODES, NOT BUGS
 
-- A repo-scoped coding rules document (`CLAUDE.md` et al.) that AI coding tools read to align with a codebase’s conventions, workflows, and guardrails.
-- Can live at multiple scopes: repo root, subfolders, parent repo, or user home (`~/.claude/CLAUDE.md`).
+We want to capture systematic issues where the AI:
+- Makes wrong assumptions about the environment/codebase
+- Uses deprecated patterns or APIs  
+- Misunderstands project structure or conventions
+- Repeatedly attempts incorrect approaches
+- Lacks critical context about how things actually work
 
-# Why standardize a root rulefile
+We do NOT want to document:
+- One-time bugs from outdated packages
+- Transient errors that won't recur
+- Things that are already caught by linters/tests
+- Personal preferences without concrete failure prevention value
+</key-principle>
 
-- Avoids fragmented local prompts and duplicated discovery work.
-- Gives newcomers a single starting point.
-- Reduces style/process drift across engineers and AI tools.
-- Harder to agree on: every line impacts the whole org, so it needs justification and stakeholder review.
+<failure-mode-categories>
+1. ENVIRONMENT MISMATCHES
+   - Wrong ports, paths, or environment variables
+   - Incorrect assumptions about installed tools/versions
+   - Misunderstanding of local vs production configs
 
-# Core principles (content, not behavior)
+2. TOOL USAGE ERRORS  
+   - Using wrong tools for tasks (e.g., Bash(grep) instead of Grep tool)
+   - Missing required follow-up actions after edits
+   - Incorrect command sequences or parameters
 
-- Minimal, high-signal instructions only; each line should be a net win across contexts.
-- Codify global processes (lint/format/typecheck/test) rather than personal preferences.
-- Document recurring mistakes and their fixes so knowledge compounds.
-- Defer to existing sources of truth: codebase conventions, linters, CI, scripts—don’t restate long standards; point to or invoke the process that enforces them.
-- Scope specificity: put universal rules in the rulefile; push niche/flow-specific steps into the relevant files or scripts and tell readers to check file headers for follow-ups.
+3. ARCHITECTURAL MISUNDERSTANDINGS
+   - Wrong assumptions about system design
+   - Misunderstanding component relationships
+   - Incorrect API usage patterns
 
-# Maintenance loop
+4. PROCESS FAILURES
+   - Missing required validation steps
+   - Wrong order of operations
+   - Skipping critical checks before actions
+</failure-mode-categories>
 
-Keep a separate, living table (e.g., Notion/Docs) of:
-- Failure case → Proposed instruction or process change → Contributor → Decision/Status.
-- Review with frequent tool users + domain owners → ensure alignment with principles → commit updates → notify users → observe and log new failures.
-- Formal evaluations aren’t emphasized for small teams; prioritize that each instruction is strictly beneficial.
+Your goal: Analyze the chat session to identify RECURRING FAILURE PATTERNS that should be documented to prevent future AI failures. Don't document things that are obvious which might not be repeating patterns.
 
-# Typical building blocks (section skeleton)
+INPUT
+1. CHAT HISTORY – complete user/assistant exchange including tool calls and outputs
+2. CLAUDE.md files – existing rulefile content (may be empty)
 
-1. Code discovery: How to trace code and search history; which search/glob/grep tools to use (and which not).
-2. Code editing: After-edit follow-ups: read file headers for required scripts (e.g., schema regen).
-3. Code quality: Follow existing code style; clarify a few repo-wide norms (e.g., import placement, typing expectations).
-4. Test design: How tests are structured locally (patterns, decorators, parametrization) and where to look for examples.
-5. Test execution: Standard commands for lint/format/test; how to run a single file vs full suite.
-6. Git operations: Don’t perform git ops automatically; outline the commit flow and checks.
-7. Commit message requirements: Title schema, concise description, reviewer selection heuristics, linking tasks/threads, revision references.
-8. Code review: Ordering of feedback (critical first) and expected context/linking.
+ANALYSIS CRITERIA  
+Only propose a rule if:
+a) The AI made the SAME TYPE of error multiple times in the session
+b) The AI wasted significant time (3+ messages) on wrong approaches  
+c) The AI discovered a STABLE, NON-OBVIOUS fact about the codebase that will trip up future AI
+d) The AI lacked critical context that caused incorrect implementations
 
-# Big idea
+DO NOT propose rules for:
+- One-time package version issues
+- Errors that existing linters/tests would catch
+- Temporary workarounds for transient problems
+- Things that are obvious from reading the code
 
-A root `CLAUDE.md` is a thin, shared interface to the repo’s actual processes and conventions. It centralizes what’s global, pushes specifics to where they belong (tools/files/CI), and evolves via a documented failure→remedy loop.
-</claude-md-context>
-
-Goal: ONLY WHEN NECESSARY - propose tiny, high-leverage edits to repo claude.md so that the next LLM avoids the failures seen in the current session and has updated context on major new changes in the codebase based on the given chat insteraction.
-
-INPUT  (all are raw text blobs, some are optional)
-1. CHAT HISTORY    – complete user/assistant exchange that include tools calls, chnages  made in the code and other related outputs.
-2. CLAUDE.md files   – map `{path, content}` of existing `CLAUDE.md` files (may be empty)
-
-THINKING GUIDELINES
-• Add a rule only if a concrete error or rework could have been prevented.  
-• Keep every new rule ≤ 2 bullet lines; reference a command instead of pasting its policy.  
-• Prefer folder-local claude.md when the issue is isolated to one sub-tree.  
-• Never include secrets, API keys, or push/publish commands.  
-• If the same idea already exists, talk about the addition details for that rule/idea.
-
-WHEN TO PROPOSE IMPROVEMENTS
-Propose an improvement if at least one of these is true:  
-a) The same error (or variant) happened twice in CHAT.  
-b) A missing invariant (lint/test/tool) caused wrong code or wasted >2 message.  
-c) A stable repo fact (script name, env var, port) surfaced for the first time.
-d) The assistant made a change to the code that is not reflected in the CLAUDE.md files.
+RULE QUALITY STANDARDS
+• Each rule must prevent a SPECIFIC failure mode
+• Keep rules ≤ 2 lines, action-oriented
+• Reference commands/processes, don't explain them
+• Only add rules that will apply to FUTURE sessions
 
 OUTPUT  (always return a xml string)
 
@@ -194,17 +219,25 @@ OUTPUT  (always return a xml string)
 • Keep bullets terse, e.g.  
   `- After editing files in api/, run  `make api-test` before committing.`
 
-EXAMPLE ITEM
+EXAMPLE
 ```
 <improvements>
   <improvement>
     <filepath>CLAUDE.md</filepath>
-    <improvement_content>Prevent remote_path error when mounting source\n- Do not pass custom args to add_local_python_source\n+ When calling `add_local_python_source`, omit `remote_path` (Modal SDK >=0.58 rejects it)\n</improvement_content>
+    <improvement_content>
+# Failure Mode Prevention
+- Port 3000 is permanently in use by system service; always use port 3001
+- When editing GraphQL schemas, must run `regen_graphql` or types will be stale
+- Use Grep tool for searching, never Bash(grep) - permissions will fail
+    </improvement_content>
   </improvement>
 </improvements>
 """,
                 },
-                {"role": "user", "content": f"Transcript:\n{transcript_str}"},
+                {
+                    "role": "user", 
+                    "content": f"Current claude.md content:\n{claude_md_content if claude_md_content else '(No claude.md file found)'}\n\nTranscript:\n{transcript_str}"
+                },
             ],
         )
 
@@ -234,16 +267,25 @@ def main():
 
     transcript_path = hook.get("transcript_path", "")
     transcript_jsonl = load_transcript(transcript_path)
+    
+    # Get current working directory and read claude.md
+    cwd = hook.get("cwd", ".")
+    claude_md_content = read_claude_md(cwd)
 
-    changes = propose_changes_from_llm(transcript_jsonl)
+    changes = propose_changes_from_llm(transcript_jsonl, claude_md_content)
 
     if not changes:
+        sys.exit(0)
+    
+    # Check if changes is just an empty improvements tag
+    cleaned_changes = changes.replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "")
+    if cleaned_changes == "<improvements></improvements>":
         sys.exit(0)
 
     # Emit JSON to block stop and instruct Claude to apply changes
     output = {
         "decision": "block",
-        "reason": f"We have an LLM that is giving us recomendations for how to update our Cluade.md file. Here are their suggestions. Apply the following CLAUDE.md updates discovered this turn. For each item: use Write/Edit to update the file at the specified path with the changes described.\n\nCHANGES_XML:\n{(changes)}",
+        "reason": f"We have an LLM that is giving us recomendations for how to update our Cluade.md file. Here are their suggestions. Apply the following CLAUDE.md updates discovered this turn. For each item: use Write/Edit to update the file at the specified path with the changes described.\n\nCHANGES_XML:\n{changes}",
     }
 
     print(json.dumps(output))
