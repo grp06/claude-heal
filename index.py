@@ -43,8 +43,8 @@ def load_transcript(path: str, max_bytes: int = 400_000) -> list:
         "uuid",
         "timestamp",
         "userType",
-        "id"
-
+        "id",
+        "signature"
     ]
 
     try:
