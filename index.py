@@ -1,28 +1,8 @@
 import os, sys, json, pathlib
-from datetime import datetime
+from debug_utils import debug_log
 from cerebras.cloud.sdk import Cerebras
 from dotenv import load_dotenv
 from prompts import CLAUDE_FAILURE_MODE_PROMPT
-
-
-def debug_log(message: str):
-    script_dir = pathlib.Path(__file__).resolve().parent
-    debug_dir = script_dir / "debug"
-    debug_dir.mkdir(exist_ok=True)
-    global _log_file_path
-    try:
-        _log_file_path
-    except NameError:
-        file_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-        _log_file_path = debug_dir / f"hook_{file_timestamp}.log"
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-    try:
-        with open(_log_file_path, "a") as f:
-            f.write(f"[{timestamp}] {message}\n")
-            f.flush()
-    except Exception as e:
-        sys.stderr.write(f"DEBUG_LOG_ERROR: {str(e)}\n")
-        sys.stderr.flush()
 
 
 def read_stdin_json():
@@ -113,7 +93,11 @@ def read_claude_md(cwd: str) -> str:
 
 
 def create_cerebras_client() -> Cerebras:
-    load_dotenv()
+    # Load .env from repo root regardless of caller CWD, then optional user-global file.
+    repo_root = pathlib.Path(__file__).resolve().parent
+    load_dotenv(repo_root / ".env", override=False)
+    load_dotenv(pathlib.Path.home() / ".claude-self-heal.env", override=False)
+
     api_key = os.getenv("API_KEY")
     if not api_key:
         raise ValueError("API_KEY not found in environment variables")

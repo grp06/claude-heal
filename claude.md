@@ -1,39 +1,73 @@
-# Claude Self-Healing Context Updater
+# CLAUDE.md
 
-note: I ran `ln -sf "$(pwd)/index.py" ~/.claude/hooks/heal_claude_files.py` early on, so this index.py file is mapped to the right place in the hooks directory
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Purpose
-Automatically keep `claude.md` (Claude context/rules) files accurate and up-to-date by analyzing each Claude Code session, detecting newly learned project facts, and applying updates without manual intervention.
+## Project Overview
 
-## How It Works
-- A **Stop hook** runs after every Claude Code conversation turn.
-- The hook:
-  1. Reads the session transcript JSONL from `transcript_path`.
-  2. Cleans and serializes it into XML.
-  3. Sends it to an LLM (Anthropic or OpenAI) with instructions to propose updates to `claude.md` files.
-  4. Receives a JSON array of `{path, changes}` objects.
-  5. Blocks stoppage (`exit 2`) and sends Claude instructions to apply those changes via Write/Edit tools.
+Claude Self-Healing Context Updater - A system that automatically updates `claude.md` files after each Claude Code session by analyzing conversations and applying learned facts to prevent recurring failures.
 
-## Goals
-- Ensure Claude always has correct persistent context (ports, architecture facts, style rules).
-- Reduce repeated mistakes caused by outdated `claude.md` files.
-- Keep edits scoped only to relevant `claude.md` files.
+## Development Commands
 
-## Constraints
-- Must only edit files specified in the `changes` JSON.
-- Preserve good existing rules when updating.
-- If change is ambiguous, ask user for confirmation.
-- Never touch unrelated files.
+```bash
+# Activate virtual environment (required before running any Python scripts)
+source venv/bin/activate  # or source claude-self-heal-venv/bin/activate if following README setup
 
-## Hook Configuration
-- Hook type: `Stop`
-- Command: `python3 ~/.claude/hooks/heal_claude_files.py`
-- Timeout: 120 seconds
+# Install dependencies
+pip install -r requirements.txt
 
-## Failure Mode Prevention
-- Do **not truncate** the transcript or `claude.md` content before sending to the LLM; pass the full cleaned strings.
-- Ensure f‑string placeholders are written as `{variable}` (no extra parentheses) to avoid syntax errors.
-- Always read the `cwd` field from the hook payload to locate project files such as `claude.md` before invoking the LLM.
-- In JSON output strings, reference variables directly (`{changes}`) rather than using `{(changes)}` which produces malformed f‑strings.
-- Before executing any Python script, ensure the project's virtual environment is activated; if `venv/` exists, run `source venv/bin/activate` first.
-- Do not run `pip install` without explicit user approval; always ask before installing new packages or changing the environment.
+# Run the hook manually for testing
+python index.py < test_input.json
+
+# Check debug logs
+ls -la debug/
+cat debug/hook_*.log
+```
+
+## Architecture
+
+### Core Components
+
+1. **index.py** - Main hook entry point
+   - Reads hook payload from stdin
+   - Loads and cleans transcript JSONL data
+   - Reads existing claude.md content
+   - Calls LLM to propose improvements
+   - Blocks stop event if changes needed
+
+2. **prompts.py** - Contains the CLAUDE_FAILURE_MODE_PROMPT
+   - Defines criteria for identifying recurring failure patterns
+   - Specifies output format for improvements
+
+3. **debug_utils.py** - Debug logging utilities
+   - Writes timestamped logs to `debug/` directory
+   - Helps troubleshoot hook execution
+
+### Hook Flow
+
+1. Stop hook triggered → `index.py` receives JSON payload via stdin
+2. Transcript loaded from `transcript_path` (max 400KB, filtered keys)
+3. Current `claude.md` content read from project's `cwd`
+4. Cerebras API called with transcript + current claude.md
+5. LLM analyzes for recurring failure patterns
+6. If improvements found → blocks stop (`exit 2`) and emits instructions for Claude to apply changes
+7. If no improvements → exits normally (`exit 0`)
+
+## Critical Implementation Details
+
+- **API Key**: Requires `API_KEY` environment variable for Cerebras API
+- **Symlink Setup**: `index.py` is symlinked to `~/.claude/hooks/heal_claude_files.py`
+- **Hook Configuration**: Stop hook with 120-second timeout
+- **Transcript Processing**: Excludes metadata keys (uuid, timestamp, etc.) to focus on content
+- **LLM Model**: Uses Cerebras `gpt-oss-120b` model
+- **Debug Logs**: Written to `debug/hook_*.log` files for troubleshooting
+
+## Failure Mode Prevention Rules
+
+- Do **not truncate** the transcript or `claude.md` content before sending to the LLM
+- Ensure f-string placeholders are written as `{variable}` (no extra parentheses)
+- Always read the `cwd` field from the hook payload to locate project files
+- Before executing any Python script, ensure the virtual environment is activated
+- Do not run `pip install` without explicit user approval
+- Always `Read` file content before performing an `Edit`
+- Use absolute paths for hook commands (e.g., `~/claude-self-heal/venv/bin/python`)
+- Check for duplicate rules before adding new failure mode entries
